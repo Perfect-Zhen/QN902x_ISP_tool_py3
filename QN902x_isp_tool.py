@@ -97,7 +97,7 @@ def cmd_crc16_check(input_str):
 
 def crc16_calculate(input_byte):
     crc_payload = str(binascii.b2a_hex(input_byte))[2:-1]
-    print('crc_payload: '+crc_payload)
+    # print('crc_payload: '+crc_payload)
     crc16 = crcmod.mkCrcFun(0x11021, rev=False, initCrc=0x0000, xorOut=0x0000)
     data = crc_payload.replace(" ", "")
     readcrcout = hex(crc16(binascii.unhexlify(data))).upper()
@@ -109,12 +109,12 @@ def crc16_calculate(input_byte):
             str_list.insert(2, '00')  # 位数不足补0
     crc_data = "".join(str_list)
     crc16_result_hex = bytes.fromhex(crc_data[-2:])+bytes.fromhex(crc_data[-4:-2])
-    print('crc caculate result: '+crc_data)
+    # print('crc caculate result: '+crc_data)
     # print(crc16_result_hex)
     return crc16_result_hex
 
 def crc16_calculate_str(input_str):
-    print('crc_payload: '+input_str)
+    # print('crc_payload: '+input_str)
     crc16 = crcmod.mkCrcFun(0x11021, rev=False, initCrc=0x0000, xorOut=0x0000)
     data = input_str.replace(" ", "")
     readcrcout = hex(crc16(binascii.unhexlify(data))).upper()
@@ -177,11 +177,13 @@ def rd_flash_id():
 
 
 def Build_connection():
+    print('Building connection........ \r\n'
+          '-> Reset your Board')
     while True:
         ser.write(b'\x33')  # build connect with target
         time.sleep(0.05)
         recv = ser.readline()
-        if recv == b'\x01':
+        if recv == CMD_CONFIRM_OK:
             print('build connect success')
             break
         elif recv != b'':
@@ -203,28 +205,37 @@ def program_one_frame(row_data):
         frame = b'\x71' + frame+ crc16_pad
     # print(frame)
     ser.write(frame)
-    # while 1:
-    #     time.sleep(1)
+
+    rec = serial_read_one_byte()
+    if rec == CMD_CONFIRM_OK:
+        rec = serial_read_one_byte()
+        if rec == CMD_EXE_OK:
+            return CMD_EXE_OK
+        else:
+            print('setup_flash: CMD_EXE_FAIL')
+            exit()
+    else:
+        print('setup_flash: CMD_CONFIRM_ERR')
+        exit()
+
+
 
 def image_programming(image,image_size):
     i = 0
     while image_size > 0:
         current_data = image[256*i:256*(i+1)]
-        program_one_frame(current_data)
+        if CMD_EXE_OK == program_one_frame(current_data):
+            print("download one frame")
         i += 1
         image_size -= 256
-        time.sleep(0.100)
 
 
 
 
 
 def set_app_loc():
-
     ser.write(set_app_loc_cmd)
-    time.sleep(0.01)
-    rec = ser.readline()
-
+    rec = serial_read_one_byte()
     if rec == CMD_CONFIRM_OK:
         return CMD_CONFIRM_OK
     else:
@@ -233,8 +244,7 @@ def set_app_loc():
 # /* sset the start address of read, program, erase and verify cmds*/
 def set_start_addr():
     ser.write(st_start_addr_cmd)
-    time.sleep(0.01)
-    rec = ser.readline()
+    rec = serial_read_one_byte()
     if rec == CMD_CONFIRM_OK:
         return CMD_CONFIRM_OK
     else:
@@ -242,16 +252,10 @@ def set_start_addr():
 
 def sector_erase_flash():
     ser.write(se_flash_cmd)
-    time.sleep(0.002)
-    rec = ser.readline()
-    print(rec)
+    rec = serial_read_one_byte()
     if rec == CMD_CONFIRM_OK:
-        time.sleep(0.01)
-        rec = ser.readline()
-        while rec == b'':
-            rec = ser.readline()
-        print(rec)
-        if rec == b'\x03':
+        rec = serial_read_one_byte()
+        if rec == CMD_EXE_OK:
             return CMD_EXE_OK
         else:
             print('sector_erase_flash: '+str(rec))
@@ -261,14 +265,11 @@ def sector_erase_flash():
         exit()
 
 def write_random_data():
-    print(write_random_data)
+    # print(write_random_data)
     ser.write(set_random_cmd)
-    time.sleep(0.01)
-    rec = ser.readline(1)
-    print(rec)
+    rec = serial_read_one_byte()
     if rec == CMD_CONFIRM_OK:
-        rec = ser.readline(1)
-        print(rec)
+        rec = serial_read_one_byte()
         if rec == CMD_EXE_OK:
             return CMD_EXE_OK
         else:
@@ -279,16 +280,11 @@ def write_random_data():
         exit()
 
 def set_flash_clk():
-    print(set_flash_clk)
+    # print(set_flash_clk)
     ser.write(set_flashclk_cmd)
-    rec = ser.readline(1)
-    while rec == b'':
-        rec = ser.readline(1)
-    print(rec)
+    rec = serial_read_one_byte()
     if rec == CMD_CONFIRM_OK:
-        rec = ser.readline(1)
-        while rec == b'':
-            rec = ser.readline(1)
+        rec = serial_read_one_byte()
         if rec == CMD_EXE_OK:
             return CMD_EXE_OK
         else:
@@ -299,7 +295,7 @@ def set_flash_clk():
         exit()
 
 def setup_flash():
-    print(setup_flash)
+    # print(setup_flash)
     ser.write(setup_flash_cmd)
     rec = serial_read_one_byte()
     if rec == CMD_CONFIRM_OK:
@@ -315,10 +311,9 @@ def setup_flash():
 
 
 def set_app_in_ram_addr():
-    print(set_app_in_ram_addr)
+    # print(set_app_in_ram_addr)
     ser.write(set_app_in_ram_addr_cmd)
-    rec = ser.readline(1)
-    print(rec)
+    rec = serial_read_one_byte()
     if rec == CMD_CONFIRM_OK:
         rec = serial_read_one_byte()
         if rec == CMD_EXE_OK:
@@ -346,12 +341,12 @@ def set_app_reset_addr():
 
 def set_app_size():
     str_list = list(hex(image_size))
-    print(str_list)
+    # print(str_list)
     while (len(str_list) < 10):
         str_list.insert(2, '0')  # 位数不足补0
     app_size_str = "".join(str_list)
     app_size_str = app_size_str[-2:]+app_size_str[-4:-2]+app_size_str[-6:-4]+app_size_str[2:4]# 倒序
-    print('app_size_str: ' + app_size_str)
+    # print('app_size_str: ' + app_size_str)
     cmd_payload_str = SET_APP_SIZE_CMD+'040000'+app_size_str
     crc_str = crc16_calculate_str(cmd_payload_str)
     set_app_size_cmd = bytes.fromhex('71'+cmd_payload_str+crc_str)
@@ -371,16 +366,16 @@ def set_app_size():
 
 
 def set_app_crc():
-    print(set_app_crc)
+    # print(set_app_crc)
     image_str = str(binascii.b2a_hex(image))[2:-1]  # convert to string
-    print('image_str: ' + image_str)
+    # print('image_str: ' + image_str)
     app_crc = crc16_calculate_str(image_str)  # calculate image app crc value
-    print('app_crc: ' + app_crc)
+    # print('app_crc: ' + app_crc)
     set_app_crc_cmd = '3e040000' + app_crc + '0000'  # struct command
     fram_crc = crc16_calculate_str(set_app_crc_cmd)
-    print('fram_crc: ' + fram_crc)
+    # print('fram_crc: ' + fram_crc)
     set_app_crc_cmd = '71' + set_app_crc_cmd + fram_crc
-    print(set_app_crc_cmd)
+    # print(set_app_crc_cmd)
     set_app_crc_cmd = bytes.fromhex(set_app_crc_cmd)
     ser.write(set_app_crc_cmd)#writ one frame
     rec = serial_read_one_byte()
@@ -411,8 +406,13 @@ def verify_image():
     ser.write(verify_image_cmd)
     rec = serial_read_one_byte()
     if rec == CMD_CONFIRM_OK:
-        return CMD_CONFIRM_OK
-
+        rec = serial_read_one_byte()
+        if rec == CMD_EXE_OK:
+            return CMD_EXE_OK
+        else:
+            print(rec)
+            print('verify_image: CMD_EXE_FAIL')
+            exit()
     else:
         print(rec)
         print('verify_image: CMD_CONFIRM_ERR')
@@ -420,10 +420,8 @@ def verify_image():
 
 def set_reboot():
     ser.write(set_reboot_cmd)
-    time.sleep(0.01)
-    rec = ser.readline()
-    rec_cfm = rec[0]
-    if rec_cfm == CMD_CONFIRM_OK:
+    rec = serial_read_one_byte()
+    if rec == CMD_CONFIRM_OK:
         return CMD_CONFIRM_OK
     else:
         print('set_reboot: CMD_CONFIRM_ERR')
@@ -432,8 +430,9 @@ def set_reboot():
 def baudrate_update(): #update baudrate to 115200
     ser.write(set_baudrate_cmd)
     # time.sleep(0.01)
-    rec = ser.readline()
-    print(rec)
+    # rec = ser.readline()
+    rec = serial_read_one_byte()
+    # print(rec)
     if rec == CMD_CONFIRM_OK:
         ser.close()
         ser.port = SER_PORT#'COM94'
@@ -446,44 +445,29 @@ def baudrate_update(): #update baudrate to 115200
         exit()
 
 
+
 #=====================================================================
 #
-# 连接
+# main function: 函数入口
 # print('input serial port:')
 # SER_PORT = input()
-SER_PORT = 'com26'
+SER_PORT = 'com6'
 ser = serial.Serial()
 ser.port = SER_PORT
 ser.baudrate = 9600
 ser.timeout = 0.05
 ser.open()
 
-print('please input firmware:')
+print('Input Your Firmware:')
 firmware = input()
-# firmware = 'firmware.bin'
+# firmware = 'C:\nxp\QN902x_SDK_1.4.0\BinFiles\BinFiles_B2_v40\qpps.bin'
 file = open(firmware, "rb")
 # file = open("firmware.bin", "rb")
 image = file.read()
 image_size = len(image)
 file.close()
 
-image_str = str(binascii.b2a_hex(image))[2:-1]
-image_hex = bytes.fromhex(image_str)
-# print('image_str'+image_str)
-# print(image)
-
-str_list = list(hex(image_size))
-print(str_list)
-while (len(str_list) < 10): # 0x12345678 -> length is 10, need add 0 to 10
-    str_list.insert(2, '0')  # 位数不足补0
-app_size_str = "".join(str_list)
-app_size_str = app_size_str[-2:] + app_size_str[-4:-2] + app_size_str[-6:-4] + app_size_str[-8:-6]
-print('app_size_str: ' + app_size_str)
-
-print('image length: ' + str(image_size))
-
 Build_connection()          # Try to connect with target
-
 baudrate_update()
 
 bl_ver = rd_bl_version()    # Get bootloader version
@@ -494,6 +478,12 @@ program_boot_inf()
 image_programming(image, image_size)         # program image
 verify_image()              # verify image
 
+# 71 4a 00 00  00 37 06
+set_reboot()
+
+print('*********************************************************')
+print('download firmware success!!!')
+print('*********************************************************')
 # file_size = sizeof(file)
 # print(file_size)
 
