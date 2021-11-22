@@ -4,6 +4,7 @@ import string
 import time
 import serial
 import crcmod
+import math
 
 SER_PORT = 'COM95'
 
@@ -48,7 +49,7 @@ se_flash_cmd = bytes.fromhex('71' + SE_FLASH_CMD + '0400000f0000005e6c')
 verify_image_cmd = bytes.fromhex('71' + VERIFY_CMD + '000000b13f')
 set_reboot_cmd = bytes.fromhex('71' + REBOOT_CMD + '0000003706')
 
-set_random_cmd = bytes.fromhex('71' + WR_RANDOM_DATA_CMD + '04000041560000ff15')
+set_random_cmd = bytes.fromhex('71' + WR_RANDOM_DATA_CMD + '040000c9520000c491')
 set_flashclk_cmd = bytes.fromhex('71' + SET_FLASH_CLK_CMD + '04000000127a003505')
 setup_flash_cmd = bytes.fromhex('71' + SETUP_FLASH_CMD + '0800000506205260b9ab010783')
 set_app_in_ram_addr_cmd = bytes.fromhex('71' + SET_APP_IN_RAM_ADDR_CMD + '040000000000109034')
@@ -131,7 +132,7 @@ def crc16_calculate_str(input_str):
 def rd_bl_version():
     get_bl_ver_cmd = bytes.fromhex('7136000000700b')
     ser.write(get_bl_ver_cmd)
-    time.sleep(0.01)
+    time.sleep(0.1)
     rec = ser.readline()
     rec_cfm = rec[0]
     # print(str_bl_ver)
@@ -145,20 +146,37 @@ def rd_bl_version():
     else:
         print('get bootloader version failed')
 
+def serial_read_one_frame():
+    head = serial_read_one_byte()
+    if head == b'\x71':
+        cmd_fied = serial_read_one_byte()
+        len_field = ser.readline(3)
+        payload_filed = ser.readline(len_field[0])
+        crc_field = ser.readline(len_field[2])
+        frame = b'\x71' + cmd_fied + len_field+payload_filed+crc_field
+        return frame
+        # print(frame)
+
 def rd_chip_id():
     rd_chip_id_cmd = bytes.fromhex('7137000000c47d')
     ser.write(rd_chip_id_cmd)
-    time.sleep(0.01)
-    rec = ser.readline()
-    rec_cfm = rec[0]
-    if rec_cfm == 1:
-        rec_payload = str(binascii.b2a_hex(rec))[2:-1]
-        if cmd_crc16_check(rec_payload) == 0:
-            chip_id = rec_payload[-6:-4]+rec_payload[-8:-6]+rec_payload[-10:-8]+rec_payload[-12:-10]
-            print('chip_id: 0x'+chip_id)
-            return bytes.fromhex(chip_id)
-        else:
-            print('rd_chip_id crc check failed')
+    rec = serial_read_one_byte()
+    if rec == CMD_CONFIRM_OK:
+        rec = serial_read_one_frame()
+        print(rec)
+    # rd_chip_id_cmd = bytes.fromhex('7137000000c47d')
+    # ser.write(rd_chip_id_cmd)
+    # time.sleep(0.01)
+    # rec = ser.readline()
+    # rec_cfm = rec[0]
+    # if rec_cfm == 1:
+    #     rec_payload = str(binascii.b2a_hex(rec))[2:-1]
+    #     if cmd_crc16_check(rec_payload) == 0:
+    #         chip_id = rec_payload[-6:-4]+rec_payload[-8:-6]+rec_payload[-10:-8]+rec_payload[-12:-10]
+    #         print('chip_id: 0x'+chip_id)
+    #         return bytes.fromhex(chip_id)
+    #     else:
+    #         print('rd_chip_id crc check failed')
 
 def rd_flash_id():
     rd_flash_id_cmd = bytes.fromhex('71380000002aa9')
@@ -181,7 +199,7 @@ def Build_connection():
           '-> Reset your Board')
     while True:
         ser.write(b'\x33')  # build connect with target
-        time.sleep(0.05)
+        time.sleep(0.005)
         recv = ser.readline()
         if recv == CMD_CONFIRM_OK:
             print('build connect success')
@@ -221,14 +239,18 @@ def program_one_frame(row_data):
 
 
 def image_programming(image,image_size):
+
+    pk_nb = image_size/256
+    print(pk_nb)
     i = 0
     while image_size > 0:
         current_data = image[256*i:256*(i+1)]
         if CMD_EXE_OK == program_one_frame(current_data):
-            print("download one frame")
+            # print("download one frame")
+            time.sleep(0.001)
         i += 1
         image_size -= 256
-
+        print('Programming -> ' + str(math.ceil(100*i/pk_nb)) + '%')
 
 
 
@@ -406,13 +428,14 @@ def verify_image():
     ser.write(verify_image_cmd)
     rec = serial_read_one_byte()
     if rec == CMD_CONFIRM_OK:
+        time.sleep(1)
         rec = serial_read_one_byte()
         if rec == CMD_EXE_OK:
             return CMD_EXE_OK
         else:
             print(rec)
             print('verify_image: CMD_EXE_FAIL')
-            exit()
+            # exit()
     else:
         print(rec)
         print('verify_image: CMD_CONFIRM_ERR')
@@ -451,7 +474,7 @@ def baudrate_update(): #update baudrate to 115200
 # main function: 函数入口
 # print('input serial port:')
 # SER_PORT = input()
-SER_PORT = 'com6'
+SER_PORT = 'com7'
 ser = serial.Serial()
 ser.port = SER_PORT
 ser.baudrate = 9600
@@ -459,23 +482,25 @@ ser.timeout = 0.05
 ser.open()
 
 print('Input Your Firmware:')
-firmware = input()
+# firmware = input()
 # firmware = 'C:\nxp\QN902x_SDK_1.4.0\BinFiles\BinFiles_B2_v40\qpps.bin'
-file = open(firmware, "rb")
+# file = open(firmware, "rb")
 # file = open("firmware.bin", "rb")
+file = open("qpps.bin", "rb")
 image = file.read()
 image_size = len(image)
 file.close()
 
 Build_connection()          # Try to connect with target
-baudrate_update()
+# baudrate_update()
 
-bl_ver = rd_bl_version()    # Get bootloader version
-chip_id = rd_chip_id()      # read chip id
-flash_id = rd_flash_id()    # read flash id
+# bl_ver = rd_bl_version()    # Get bootloader version
+# chip_id = rd_chip_id()      # read chip id
+# flash_id = rd_flash_id()    # read flash id
 
 program_boot_inf()
 image_programming(image, image_size)         # program image
+time.sleep(0.1)
 verify_image()              # verify image
 
 # 71 4a 00 00  00 37 06
@@ -486,7 +511,6 @@ print('download firmware success!!!')
 print('*********************************************************')
 # file_size = sizeof(file)
 # print(file_size)
-
 
 ser.close()
 
