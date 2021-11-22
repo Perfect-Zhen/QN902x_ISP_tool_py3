@@ -6,6 +6,10 @@ import serial
 import crcmod
 import math
 
+from tkinter import *
+from tkinter import messagebox
+
+
 SER_PORT = 'COM95'
 
 CMD_CONFIRM_OK  = b'\x01'
@@ -474,45 +478,52 @@ def baudrate_update(): #update baudrate to 115200
 # main function: 函数入口
 # print('input serial port:')
 # SER_PORT = input()
-SER_PORT = 'com7'
-ser = serial.Serial()
-ser.port = SER_PORT
-ser.baudrate = 9600
-ser.timeout = 0.05
-ser.open()
+if __name__ == '__main__':
+    root = Tk(className=' QN902x ISP Tool v0.0.1.  ')
+    root.geometry("450x180")
 
-print('Input Your Firmware:')
-# firmware = input()
-# firmware = 'C:\nxp\QN902x_SDK_1.4.0\BinFiles\BinFiles_B2_v40\qpps.bin'
-# file = open(firmware, "rb")
-# file = open("firmware.bin", "rb")
-file = open("qpps.bin", "rb")
-image = file.read()
-image_size = len(image)
-file.close()
+    root.mainloop()
 
-Build_connection()          # Try to connect with target
-# baudrate_update()
+    SER_PORT = 'com7'
+    ser = serial.Serial()
+    ser.port = SER_PORT
+    ser.baudrate = 9600
+    ser.timeout = 0.05
+    ser.open()
 
-# bl_ver = rd_bl_version()    # Get bootloader version
-# chip_id = rd_chip_id()      # read chip id
-# flash_id = rd_flash_id()    # read flash id
 
-program_boot_inf()
-image_programming(image, image_size)         # program image
-time.sleep(0.1)
-verify_image()              # verify image
+    print('Input Your Firmware:')
+    # firmware = input()
+    # firmware = 'C:\nxp\QN902x_SDK_1.4.0\BinFiles\BinFiles_B2_v40\qpps.bin'
+    # file = open(firmware, "rb")
+    # file = open("firmware.bin", "rb")
+    file = open("qpps.bin", "rb")
+    image = file.read()
+    image_size = len(image)
+    file.close()
 
-# 71 4a 00 00  00 37 06
-set_reboot()
+    Build_connection()          # Try to connect with target
+    # baudrate_update()
 
-print('*********************************************************')
-print('download firmware success!!!')
-print('*********************************************************')
-# file_size = sizeof(file)
-# print(file_size)
+    # bl_ver = rd_bl_version()    # Get bootloader version
+    # chip_id = rd_chip_id()      # read chip id
+    # flash_id = rd_flash_id()    # read flash id
 
-ser.close()
+    program_boot_inf()
+    image_programming(image, image_size)         # program image
+    time.sleep(0.1)
+    verify_image()              # verify image
+
+    # 71 4a 00 00  00 37 06
+    set_reboot()
+
+    print('*********************************************************')
+    print('download firmware success!!!')
+    print('*********************************************************')
+    # file_size = sizeof(file)
+    # print(file_size)
+
+    ser.close()
 
 
 
